@@ -1,0 +1,23 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Fenix", "Fenix\Fenix.csproj", "{8E948044-7CB9-424E-9BC5-B4119148F6FA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FenixSimpleApp", "FenixSimpleApp\FenixSimpleApp.csproj", "{8485EBEB-42B0-4B6E-BB31-E2D8216C9555}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{8E948044-7CB9-424E-9BC5-B4119148F6FA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8E948044-7CB9-424E-9BC5-B4119148F6FA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8E948044-7CB9-424E-9BC5-B4119148F6FA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8E948044-7CB9-424E-9BC5-B4119148F6FA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8485EBEB-42B0-4B6E-BB31-E2D8216C9555}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8485EBEB-42B0-4B6E-BB31-E2D8216C9555}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8485EBEB-42B0-4B6E-BB31-E2D8216C9555}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8485EBEB-42B0-4B6E-BB31-E2D8216C9555}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
