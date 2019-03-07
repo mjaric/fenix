@@ -1,3 +1,4 @@
+using System;
 using Newtonsoft.Json.Linq;
 
 namespace Fenix
@@ -5,18 +6,18 @@ namespace Fenix
     public class Push
     {
         public readonly string Topic;
-        public readonly string Event;
-        public readonly object Payload;
-        public readonly long? Ref;
+        public readonly string ChannelEvent;
+        public readonly JObject Payload;
+        public readonly long? PushRef;
         public readonly long? JoinRef;
 
 
-        public Push(string topic, string @event, object payload, long? @ref, long? joinRef = null)
+        internal Push(string topic, string channelEvent, JObject payload, long? pushRef, long? joinRef = null)
         {
             Topic = topic;
-            Event = @event;
+            ChannelEvent = channelEvent;
             Payload = payload;
-            Ref = @ref;
+            PushRef = pushRef;
             JoinRef = joinRef;
         }
 
@@ -24,10 +25,10 @@ namespace Fenix
         {
             var array = new JArray(
                 JoinRef?.ToString(),
-                Ref?.ToString(),
+                PushRef?.ToString(),
                 Topic,
-                Event,
-                JObject.FromObject(Payload)
+                ChannelEvent,
+                Payload
             );
             return array.ToString();
         }
@@ -36,18 +37,41 @@ namespace Fenix
         internal static string CreateNetworkPackage(string topic, string @event, object payload, long? @ref,
             long? joinRef = null)
         {
-            return new Push(topic, @event, payload, @ref, joinRef).ToMessage();
+            // TODO: VSN 1 support
+            return new Push(topic, @event, JObject.FromObject(payload), @ref, joinRef).ToMessage();
         }
-        
 
-        private static long? ParseRef(string @ref)
+        internal static Push FromPackage(string package)
         {
-            if (@ref != null && long.TryParse(@ref, out var refNumber))
+            // TODO: VSN 1 support
+            var token = JArray.Parse(package);
+            if (token.Count < 5)
+            {
+                throw new ArgumentException($"Got invalid payload from server `{package}`", nameof(package));
+            }
+
+            return new Push(
+                joinRef: ParseRef(token[0].Value<string>()),
+                pushRef: ParseRef(token[1].Value<string>()),
+                topic: token[2].Value<string>(),
+                channelEvent: token[3].Value<string>(),
+                payload: token[4] as JObject
+            );
+        }
+
+        public static long? ParseRef(string pushRef)
+        {
+            if (pushRef != null && long.TryParse(pushRef, out var refNumber))
             {
                 return refNumber;
             }
 
             return null;
+        }
+
+        public string Inspect()
+        {
+            return $"#Push<JoinRef={JoinRef}, PushRef={PushRef}, Topic='{Topic}', ChannelEvent='{ChannelEvent}'>";
         }
     }
 }

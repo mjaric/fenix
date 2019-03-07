@@ -1,44 +1,49 @@
 using System;
 using System.Threading.Tasks;
 using Fenix.Common;
+using Fenix.Responses;
+using Newtonsoft.Json.Linq;
 
 namespace Fenix.Internal
 {
     internal class JoinChannelMessage : InternalMessage
     {
-        public readonly TaskCompletionSource<Channel> Source;
+        public readonly TaskCompletionSource<JoinResult> Source;
+        public readonly Channel Channel;
         public readonly string Topic;
-        public readonly object Parameters;
-        public readonly TimeSpan Timeout;
-        public readonly Action<Channel, Push> OnPush;
-        public readonly Action<Channel, ChannelLeaveReason, Exception> OnLeave;
+        public readonly object Payload;
 
         public JoinChannelMessage(
-            TaskCompletionSource<Channel> source, 
+            TaskCompletionSource<JoinResult> source,
+            Channel channel,
             string topic, 
-            object parameters,
-            TimeSpan timeout,
-            Action<Channel, Push> onPush,
-            Action<Channel, ChannelLeaveReason, Exception> onLeave = null
+            object payload
         )
         {
             Ensure.NotNull(source, nameof(source));
             Ensure.NotNull(topic, nameof(topic));
             Ensure.NotNull(topic, nameof(topic));
             
-            
-            
             Source = source;
+            Channel = channel;
             Topic = topic;
-            Parameters = parameters;
-            Timeout = timeout;
-            OnPush = onPush;
-            OnLeave = onLeave;
+            Payload = payload;
         }
     }
 
     internal class ChannelJoinedMessage : InternalMessage
     {
-        public readonly string ChannelName;
+        public readonly long Ref;
+        public readonly long JoinRef;
+        public readonly string Topic;
+        public readonly JObject JoinMessage;
+
+        public ChannelJoinedMessage(long @ref, long joinRef, string topic, JObject joinMessage)
+        {
+            Ref = @ref;
+            JoinRef = joinRef;
+            Topic = topic;
+            JoinMessage = joinMessage;
+        }
     }
 }

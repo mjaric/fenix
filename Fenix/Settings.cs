@@ -6,7 +6,7 @@ namespace Fenix
     /// <summary>
     /// Options for Fenix <see cref="Socket"/>
     /// </summary>
-    public sealed class Options
+    public sealed class Settings
     {
         /// <summary>
         /// Gets or sets the timeout that will be triggered if push response 
@@ -94,7 +94,19 @@ namespace Fenix
         /// </summary>
         public int MaxReconnections { get; set; }
         
-        public Options()
+        /// <summary>
+        /// The maximum number of retry attempts.
+        /// Default 2
+        /// </summary>
+        public int MaxRetries { get; set; }
+        /// <summary>
+        /// The maximum number of outstanding items allowed in the queue.
+        ///
+        /// Default is 5000
+        /// </summary>
+        public int MaxQueueSize { get; set; }
+        
+        public Settings()
         {
             PushTimeout = TimeSpan.FromSeconds(10);
             ChannelRejoinTimeout = TimeSpan.FromSeconds(1);
@@ -117,6 +129,9 @@ namespace Fenix
             MaxConcurrentItems = 5000;
             
             MaxReconnections = Int32.MaxValue;
+
+            MaxRetries = 2;
+            MaxQueueSize = 5000;
 
         }
     }

@@ -6,7 +6,7 @@ namespace Fenix.Exceptions
     /// <summary>
     /// Exception thrown if an operation expires before it can be scheduled.
     /// </summary>
-    public class OperationExpiredException : FinixException
+    public class OperationExpiredException : FenixException
     {
         /// <summary>
         /// Constructs a new <see cref="OperationExpiredException"/>.

@@ -3,7 +3,7 @@ namespace Fenix.Exceptions
     /// <summary>
     /// Exception thrown if the number of retries for an operation is reached.
     /// </summary>
-     public class RetriesLimitReachedException : FinixException
+     public class RetriesLimitReachedException : FenixException
     {
         /// <summary>
         /// Constructs a new instance of <see cref="RetriesLimitReachedException"/>.

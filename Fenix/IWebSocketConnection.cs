@@ -4,6 +4,6 @@ namespace Fenix
 {
     public interface IWebSocketConnection
     {
-        Task ConnectAsync(Options options);
+        Task ConnectAsync(Settings settings);
     }
 }

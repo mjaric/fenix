@@ -12,13 +12,18 @@ namespace FenixSimpleApp
     class Program
     {
         private const string token =
-                "SFMyNTY.g3QAAAACZAAEZGF0YW0AAAAEMTIzNGQABnNpZ25lZG4GAJtqq_JoAQ.UtOuMffuGwSHPUWGcJVrwYq4xoT8Ficssni_BzZh0rk";
+                "SFMyNTY.g3QAAAACZAAEZGF0YW0AAAAEMTIzNGQABnNpZ25lZG4GAJMq6E5pAQ.fiAuw0yCDMvzi_gCkAbcWxAqTnWDW6w5yod8-RlQJME";
 
         private Socket _socket;
 
         public Program()
         {
-            _socket = new Socket(new Options());
+            var settings = new Settings();
+            _socket = new Socket(settings);
+            _socket.Connected += (sender, args) =>
+            {
+                settings.Logger.Info("CONNECTED");
+            };
         }
 
         static void Main(string[] args)
@@ -71,11 +76,11 @@ namespace FenixSimpleApp
         }
 
 
-        private void JoinLobby()
+        private async void JoinLobby()
         {
-            /*var channel = _socket.CreateChannel("room:lobby", new[] {("nick_name", "Test User")});
+            var channel = _socket.Channel("room:lobby", new {NickName = "Timotije"});
 
-            channel.On("new_message", (channel, payload) =>
+            channel.Subscribe("new_message", (ch, payload) =>
             {
                 Console.WriteLine($@"
                 Got LOBBY message
@@ -84,30 +89,22 @@ namespace FenixSimpleApp
             });
 
 
-            channel.JoinAsync()
-                   .ContinueWith(t2 =>
-                   {
-                       if (!t2.IsFaulted)
-                       {
-                           channel.PushAsync(new ChatMessage("Hello there!"))
-                                  .ContinueWith(t =>
-                                  {
-                                      Console.WriteLine(t.IsFaulted
-                                              ? $"FAILED to send message to lobby [{t.Exception.Message}, {t.Exception.GetType()}]"
-                                              : "Message sent!!!!!");
-                                  });
-                       }
-                       else
-                       {
-                           Console.WriteLine(
-                               $"FAILED to send message to lobby [{t2.Exception.Message}, {t2.Exception.GetType()}]");
-                       }
-                   });*/
+            try
+            {
+                var result = await channel.JoinAsync();
+                Console.WriteLine($"JOINED: {result.Response}");
+//                await channel.SendAsync("new_msg", new {body = "Hi there"});
+                
+            }
+            catch (Exception ex)
+            {
+                _socket.Settings.Logger.Error(ex);
+            }
         }
 
         private void OnLobbyLeave(Channel channel, ChannelLeaveReason reason, Exception ex)
         {
-            _socket.ConnectionOptions.Logger.Info(
+            _socket.Settings.Logger.Info(
                 $"Channel Leave: {channel.Topic}, reason {reason}, exception [{ex?.GetType()}, {ex?.Message}] ");
         }
 

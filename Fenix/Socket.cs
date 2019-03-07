@@ -2,7 +2,9 @@
 using System.Collections.Generic;
 using System.Net.WebSockets;
 using System.Threading.Tasks;
+using Fenix.ClientOperations;
 using Fenix.Internal;
+using Newtonsoft.Json.Linq;
 
 namespace Fenix
 {
@@ -10,13 +12,13 @@ namespace Fenix
     {
         private SocketLogicHandler _handler;
 
-        public Options ConnectionOptions { get; }
+        public Settings Settings { get; }
 
-        public Socket(Options options)
+        public Socket(Settings settings)
         {
-            ConnectionOptions = options;
+            Settings = settings;
 
-            _handler = new SocketLogicHandler(this, options);
+            _handler = new SocketLogicHandler(this, settings);
         }
 
         /// <summary>
@@ -27,7 +29,7 @@ namespace Fenix
         /// <returns>Task</returns>
         public Task ConnectAsync(Uri uri, (string, string)[] parameters = null)
         {
-            parameters = parameters ?? new (string, string)[]{};
+            parameters = parameters ?? new (string, string)[] { };
             var source = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
             _handler.EnqueueMessage(new EstablishConnectionMessage(source, uri, parameters));
             return source.Task;
@@ -40,34 +42,55 @@ namespace Fenix
 
         public void Close()
         {
-            _handler.EnqueueMessage(new CloseConnectionMessage(WebSocketCloseStatus.NormalClosure, "Connection close requested by client.", null));
+            _handler.EnqueueMessage(new CloseConnectionMessage(WebSocketCloseStatus.NormalClosure,
+                "Connection close requested by client.", null));
         }
 
-        /// <summary>
-        /// Joins to phoenix channel
-        /// </summary>
-        /// <param name="channelName"></param>
-        /// <param name="parameters"></param>
-        /// <param name="onPush"></param>
-        /// <param name="onLeave"></param>
-        /// <returns></returns>
-        public Task<Channel> JoinChannelAsync(
-            string channelName, 
-            object parameters, 
-            Action<Channel, Push> onPush,
-            Action<Channel, ChannelLeaveReason, Exception> onLeave = null
-        )
+        public IChannel Channel(string topic, object payload)
         {
-            var source = new TaskCompletionSource<Channel>(TaskCreationOptions.RunContinuationsAsynchronously);
-            _handler.EnqueueMessage(new JoinChannelMessage(
-                source,
-                channelName,
-                parameters,
-                ConnectionOptions.PushTimeout,
-                onPush,
-                onLeave
-            ));
-            return source.Task;
+            return _handler.SubscribeTopic(topic, payload);
         }
+
+        private async Task EnqueueOperation(IClientOperation operation)
+        {
+            while (_handler.TotalOperationCount >= Settings.MaxQueueSize)
+            {
+                await Task.Delay(1).ConfigureAwait(false);
+            }
+
+            _handler.EnqueueMessage(
+                new StartOperationMessage(operation, Settings.MaxRetries, Settings.OperationTimeout));
+        }
+        
+        public event EventHandler<ClientConnectionEventArgs> Connected
+        {
+            add => _handler.Connected += value;
+            remove => _handler.Connected -= value;
+        }
+
+        public event EventHandler<ClientConnectionEventArgs> Disconnected
+        {
+            add => _handler.Disconnected += value;
+            remove => _handler.Disconnected -= value;
+        }
+
+        public event EventHandler<ClientReconnectingEventArgs> Reconnecting
+        {
+            add => _handler.Reconnecting += value;
+            remove => _handler.Reconnecting -= value;
+        }
+
+        public event EventHandler<ClientClosedEventArgs> Closed
+        {
+            add => _handler.Closed += value;
+            remove => _handler.Closed -= value;
+        }
+
+        public event EventHandler<ClientErrorEventArgs> ErrorOccurred
+        {
+            add => _handler.ErrorOccurred += value;
+            remove => _handler.ErrorOccurred -= value;
+        }
+
     }
 }

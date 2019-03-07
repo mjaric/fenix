@@ -1,10 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.WebSockets;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,13 +15,11 @@ namespace Fenix
 {
     internal class WebSocketConnection : WebSocketConnectionBase
     {
-        internal const int MaxSendPacketSize = 4 * 1024;
-
-        private ILogger _logger;
+        private readonly ILogger _logger;
         private const int ReceiveChunkSize = 1024;
         private const int SendChunkSize = 1024;
 
-        private ClientWebSocket _ws;
+        private readonly ClientWebSocket _ws;
         private readonly Uri _uri;
         private readonly (string, string)[] _params;
         private readonly CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
@@ -120,11 +116,10 @@ namespace Fenix
         {
             while (!_sendQueue.IsEmpty && Interlocked.CompareExchange(ref _sending, 1, 0) == 0)
             {
-                var bytes = 0;
                 while (_sendQueue.TryDequeue(out var segment))
                 {
                     if (segment.Array == null) continue;
-                    NotifySendStarting(segment.Array.Length);
+                    NotifySendStarting(segment.Count);
                     SendMessageAsync(segment);
                 }
 
@@ -223,11 +218,12 @@ namespace Fenix
 
         private void ProcessReceive(IEnumerable<ArraySegment<byte>> segments)
         {
-            Ensure.NotNull(segments, nameof(segments));
+            var enumerable = segments as ArraySegment<byte>[] ?? segments.ToArray();
+            Ensure.NotNull(enumerable, nameof(segments));
 
-            var length = segments.Sum(s => s.Count);
+            var length = enumerable.Sum(s => s.Count);
             NotifyReceiveCompleted(length);
-            _receiveQueue.Enqueue(segments);
+            _receiveQueue.Enqueue(enumerable);
             TryDequeueReceivedData();
         }
 
@@ -237,15 +233,14 @@ namespace Fenix
             {
                 if (!_receiveQueue.IsEmpty)
                 {
-                    int bytes;
-
                     _receiveQueue.TryDequeue(out var segments);
 
-                    bytes = segments.Sum(s => s.Count);
+                    var enumerable = segments as ArraySegment<byte>[] ?? segments.ToArray();
+                    var bytes = enumerable.Sum(s => s.Count);
                     using (var stream = new MemoryStream(new byte[bytes], 0, bytes, true))
                     {
                         var offset = 0;
-                        foreach (var segment in segments)
+                        foreach (var segment in enumerable)
                         {
                             stream.Write(segment.Array, offset, offset + segment.Count);
                         }

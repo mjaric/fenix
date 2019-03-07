@@ -1,3 +1,5 @@
+using System;
+
 namespace Fenix.Logging
 {
     public class NoopLogger : ILogger
@@ -17,7 +19,11 @@ namespace Fenix.Logging
         public void Error(string message)
         {
         }
-        
+
+        public void Error(Exception ex)
+        {
+        }
+
         public static readonly ILogger Instance = new NoopLogger();
     }
 }

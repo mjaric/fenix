@@ -13,27 +13,33 @@ namespace Fenix.Logging
 
         public void Debug(string message)
         {
-            if (_logLevel >= LogLevel.Debug)
+            if (_logLevel.CompareTo(LogLevel.Debug) <= 0)
                 Log("debug", message);
         }
 
         public void Info(string message)
         {
-            if (_logLevel >= LogLevel.Info)
+            if (_logLevel.CompareTo(LogLevel.Info) <= 0)
                 Log("info", message);
         }
 
         public void Warn(string message)
         {
-            if (_logLevel >= LogLevel.Warn)
+            if (_logLevel.CompareTo(LogLevel.Warn) <= 0)
                 Log("warn", message);
         }
 
 
         public void Error(string message)
         {
-            if (_logLevel >= LogLevel.Error)
+            if (_logLevel.CompareTo(LogLevel.Error) <= 0)
                 Log("error", message);
+        }
+        
+        public void Error(Exception exception)
+        {
+            if (_logLevel.CompareTo(LogLevel.Error) <= 0)
+                Log("error", $"{exception.GetType().Name}: {exception.Message}\n{exception.StackTrace}");
         }
 
         private void Log(string level, string message)

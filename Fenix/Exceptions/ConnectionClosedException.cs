@@ -7,7 +7,7 @@ namespace Fenix.Exceptions
     /// Exception thrown by ongoing operations which are terminated
     /// by an connection closing.
     /// </summary>
-    public class ConnectionClosedException : FinixException
+    public class ConnectionClosedException : FenixException
     {
         /// <summary>
         /// Constructs a new <see cref="ConnectionClosedException" />.

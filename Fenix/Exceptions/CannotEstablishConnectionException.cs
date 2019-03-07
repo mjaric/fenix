@@ -3,7 +3,7 @@ using System.Runtime.Serialization;
 
 namespace Fenix.Exceptions
 {
-    public class CannotEstablishConnectionException : FinixException
+    public class CannotEstablishConnectionException : FenixException
     {
         /// <summary>
         /// Constructs a new <see cref="CannotEstablishConnectionException" />.
@@ -36,7 +36,7 @@ namespace Fenix.Exceptions
         }
     }
 
-    public class HeartbeatTimeoutException : FinixException
+    public class HeartbeatTimeoutException : FenixException
     {
         /// <summary>
         /// Constructs a new <see cref="CannotEstablishConnectionException" />.

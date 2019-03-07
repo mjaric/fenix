@@ -6,7 +6,7 @@ namespace Fenix.Exceptions
     /// <summary>
     /// Exception thrown if an operation times out.
     /// </summary>
-    public class OperationTimedOutException : FinixException
+    public class OperationTimedOutException : FenixException
     {
         /// <summary>
         /// Constructs a new <see cref="OperationTimedOutException"/>.

@@ -7,7 +7,7 @@ namespace Fenix.Exceptions
     /// Exception thrown if there is no result for an operation for
     /// which one is expected.
     /// </summary>
-    public class NoResultException : FinixException
+    public class NoResultException : FenixException
     {
         /// <summary>
         /// Constructs a new <see cref="NoResultException"/>.
