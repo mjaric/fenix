@@ -438,32 +438,6 @@ namespace Fenix
             });
         }
 
-
-        private void JoinChannel(
-            TaskCompletionSource<JoinResult> source,
-            string topic,
-            object parameters,
-            TimeSpan timeout
-        )
-        {
-            switch (_state)
-            {
-                case ConnectionState.Init:
-                    source.SetException(new InvalidOperationException("Fenix socket connection is not active!"));
-                    break;
-                case ConnectionState.Connecting:
-                case ConnectionState.Connected:
-//                    var ops = new JoinChannelOperation(_logger, source, topic, onPush,
-//                        onLeave, () => _connection);
-                    // TODO: add Channel to ChannelManager
-                    break;
-                case ConnectionState.Closed:
-                    source.SetException(new ObjectDisposedException("Finix websocket is closed and disposed."));
-                    break;
-                default: throw new Exception($"Unknown state: {_state}.");
-            }
-        }
-
         private void RaiseConnectedEvent(Uri endpoint)
         {
             Connected(_socket, new ClientConnectionEventArgs(_socket, endpoint));
@@ -549,7 +523,7 @@ namespace Fenix
             var channel = new Channel(_settings, this, topic, payload);
             _channels.AddOrUpdate(topic, channel, (t, oldChannel) =>
             {
-                oldChannel.LeaveAsync();
+                oldChannel.Leave();
                 return channel;
             });
             

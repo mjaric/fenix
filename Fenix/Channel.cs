@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Fenix.ClientOperations;
@@ -22,8 +23,8 @@ namespace Fenix
         private readonly SocketLogicHandler _handler;
         private readonly object _payload;
 
-        private readonly ConcurrentQueue<PushOperation> _pushBuffer =
-                new ConcurrentQueue<PushOperation>();
+        private readonly ConcurrentQueue<(PushOperation, int?, TimeSpan?)> _pushBuffer =
+                new ConcurrentQueue<(PushOperation, int?, TimeSpan?)>();
 
         private readonly ConcurrentDictionary<string, Action<IChannel, JObject>> _bindings =
                 new ConcurrentDictionary<string, Action<IChannel, JObject>>();
@@ -77,12 +78,7 @@ namespace Fenix
 
         public void Dispose()
         {
-            LeaveAsync();
-        }
-
-        internal string ReplayEventName(long pushRef)
-        {
-            return $"chan_reply_{pushRef}";
+            Leave();
         }
 
         public IChannel Subscribe(string eventName, Action<IChannel, JObject> callback)
@@ -111,15 +107,28 @@ namespace Fenix
             return await source.Task.ConfigureAwait(false);
         }
 
-        public Task LeaveAsync()
+        public void Leave()
         {
             throw new NotImplementedException();
         }
 
-        public async Task<SendResult> SendAsync(string eventType, object payload)
+        public async Task<SendResult> SendAsync(string eventType, object payload, int? maxRetries = null,
+            TimeSpan? timeout = null)
         {
             var source = TaskCompletionSourceFactory.Create<SendResult>();
-            _pushBuffer.Enqueue(new PushOperation(_settings.Logger, source, JoinRef, Topic, eventType, payload));
+            _pushBuffer.Enqueue(
+                (
+                    new PushOperation(
+                        _settings.Logger,
+                        source,
+                        JoinRef,
+                        Topic,
+                        eventType, payload
+                    ),
+                    maxRetries.GetValueOrDefault(_settings.MaxRetries),
+                    timeout.GetValueOrDefault(_settings.OperationTimeout)
+                )
+            );
             await TryProcessBuffer();
             return await source.Task.ConfigureAwait(false);
         }
@@ -132,15 +141,6 @@ namespace Fenix
                 ThreadPool.QueueUserWorkItem(_ => { callback.Invoke(channel, push.Payload); });
             }
         }
-        
-        private async Task EnqueueOperation(IClientOperation operation)
-        {
-            while (_handler.TotalOperationCount >= _settings.MaxQueueSize)
-            {
-                await Task.Delay(1).ConfigureAwait(false);
-            }
-            _handler.EnqueueMessage(new StartOperationMessage(operation, _settings.MaxRetries, _settings.OperationTimeout));
-        }
 
 
         private async Task TryProcessBuffer()
@@ -149,15 +149,33 @@ namespace Fenix
             {
                 do
                 {
-                    while (_pushBuffer.TryDequeue(out var operation) && _state == ChannelState.Joined)
+                    while (_pushBuffer.TryDequeue(out var valueTuple) && _state == ChannelState.Joined)
                     {
+                        var (operation, retries, timeout) = valueTuple;
                         operation.SetJoinRef(JoinRef);
-                        await EnqueueOperation(operation);
+                        await EnqueueOperation(operation, retries, timeout);
                     }
 
                     Interlocked.Exchange(ref _sending, 0);
-                } while (_pushBuffer.Count > 0 && Interlocked.CompareExchange(ref _sending, 1, 0) == 0 && _state == ChannelState.Joined);
+                } while (_pushBuffer.Count > 0 && Interlocked.CompareExchange(ref _sending, 1, 0) == 0 &&
+                         _state == ChannelState.Joined);
             }
+        }
+        
+        private async Task EnqueueOperation(IClientOperation operation, int? retries = null, TimeSpan? timeout = null)
+        {
+            while (_handler.TotalOperationCount >= _settings.MaxQueueSize)
+            {
+                await Task.Delay(1).ConfigureAwait(false);
+            }
+
+            _handler.EnqueueMessage(
+                new StartOperationMessage(
+                    operation,
+                    retries.GetValueOrDefault(_settings.MaxRetries),
+                    timeout.GetValueOrDefault(_settings.OperationTimeout)
+                )
+            );
         }
     }
 }

@@ -14,21 +14,15 @@ namespace Fenix.ClientOperations
         protected readonly ILogger Logger;
         private readonly string _requestEventType;
         private readonly TaskCompletionSource<TResult> _source;
-        private long _joinRef;
         private readonly string _topic;
-        private long _pushRef;
-
+        
         private int _completed;
 
         private Push _response;
 
-        public long JoinRef
-        {
-            get { return _joinRef; }
-            protected set { _joinRef = value; }
-        }
+        public long JoinRef { get; protected set; }
 
-        public long PushRef => _pushRef;
+        public long PushRef { get; private set; }
 
         public string Topic => _topic;
 
@@ -42,7 +36,7 @@ namespace Fenix.ClientOperations
         {
             Logger = logger;
             _source = source;
-            _joinRef = joinRef;
+            JoinRef = joinRef;
             _topic = topic;
             _requestEventType = requestEventType;
         }
@@ -57,13 +51,13 @@ namespace Fenix.ClientOperations
         public Push CreateNetworkPackage(long pushRef)
         {
             Ensure.Positive(pushRef, nameof(pushRef));
-            _pushRef = pushRef;
+            PushRef = pushRef;
             return new Push(
                 _topic,
                 _requestEventType,
                 JObject.FromObject(CreateRequestDto()),
-                _pushRef,
-                _joinRef
+                PushRef,
+                JoinRef
             );
         }
 
@@ -76,14 +70,16 @@ namespace Fenix.ClientOperations
                     // ["1","1","room:lobby","phx_error",{...}]
                     return InspectServerErrorResponse(push);
                 case ChannelEvents.Close:
+                    // ["1","1","room:lobby","phx_close",{}]
                     return InspectCloseResponse(push);
-                default:
+                case ChannelEvents.Reply:
                     _response = push;
                     // EXAMPLE:
                     // ["1","1","room:lobby","phx_reply",{"status":"ok","response":{...}}]
                     // ["1","1","room:lobby","phx_reply",{"status":"error","response":{...}}]
-                    // ["1","1","room:lobby","phx_close",{}]
                     return InspectResponse(push);
+                default:
+                    return InspectUnexpectedCommand(push);
             }
         }
 
@@ -119,7 +115,7 @@ namespace Fenix.ClientOperations
             return new InspectionResult(InspectionDecision.Retry, "Server Error");
         }
 
-        public InspectionResult InspectCloseResponse(Push push)
+        public virtual InspectionResult InspectCloseResponse(Push push)
         {
             return new InspectionResult(InspectionDecision.EndOperation, "Got `phx_close` response.");
         }

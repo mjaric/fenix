@@ -2,6 +2,14 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
+    <PackageVersion>0.1.0</PackageVersion>
+    <Title>Fenix</Title>
+    <Authors>Milan Jarić</Authors>
+    <Description>Phoenixframework websocket protocol .NET implementation</Description>
+    <PackageProjectUrl>https://github.com/mjaric/fenix</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/mjaric/fenix.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>phoenixframework, websocket, elixir</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

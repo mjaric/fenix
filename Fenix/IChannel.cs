@@ -10,6 +10,9 @@ namespace Fenix
     /// </summary>
     public interface IChannel
     {   
+        /// <summary>
+        /// Channels topic name
+        /// </summary>
         string Topic { get; }
 
         /// <summary>
@@ -26,24 +29,27 @@ namespace Fenix
         IChannel Unsubscribe(string eventName);
 
         /// <summary>
-        /// Initiates async con operation.
+        /// Initiates async join operation. Once "phx_reply" is received, channel will be ready to send and receive messages.
         /// </summary>
-        /// <param name="payload">optional join payload</param>
-        /// <returns></returns>
+        /// <returns>
+        /// <see cref="JoinResult"/> if operation finishes with "phx_reply" response from server.
+        /// Please note that operation can result with status equal to "ok" or "error"!
+        /// </returns>
         Task<JoinResult> JoinAsync();
 
         /// <summary>
-        /// 
+        /// When called, leaves channel and stops all subscriptions.
         /// </summary>
-        /// <returns></returns>
-        Task LeaveAsync();
+        void Leave();
 
         /// <summary>
         /// Pushes payload to socket
         /// </summary>
         /// <param name="eventType">Event type</param>
         /// <param name="payload">The payload that should be sent to socket</param>
+        /// <param name="maxRetries">Number of retries before operation is considered as failed.</param>
+        /// <param name="timeout">TimeSpan after which operation will timout if no reply is received from server.</param>
         /// <returns></returns>
-        Task<SendResult> SendAsync(string eventType, object payload);
+        Task<SendResult> SendAsync(string eventType, object payload, int? maxRetries = null, TimeSpan? timeout = null);
     }
 }

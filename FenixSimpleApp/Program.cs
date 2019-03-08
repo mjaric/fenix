@@ -80,7 +80,7 @@ namespace FenixSimpleApp
         {
             var channel = _socket.Channel("room:lobby", new {NickName = "Timotije"});
 
-            channel.Subscribe("new_message", (ch, payload) =>
+            channel.Subscribe("new_msg", (ch, payload) =>
             {
                 Console.WriteLine($@"
                 Got LOBBY message
@@ -92,9 +92,12 @@ namespace FenixSimpleApp
             try
             {
                 var result = await channel.JoinAsync();
-                Console.WriteLine($"JOINED: {result.Response}");
+                _socket.Settings.Logger.Info($"JOINED: {result.Response}");
+                Task.Delay(5000).ContinueWith(task => { channel.SendAsync("new_msg", new {body = "Hi guys 1"}); });
+                Task.Delay(5000).ContinueWith(task => { channel.SendAsync("new_msg", new {body = "Hi guys 2"}); });
+                Task.Delay(5000).ContinueWith(task => { channel.SendAsync("new_msg", new {body = "Hi guys 3"}); });
 //                await channel.SendAsync("new_msg", new {body = "Hi there"});
-                
+
             }
             catch (Exception ex)
             {
