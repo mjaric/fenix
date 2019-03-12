@@ -12,7 +12,11 @@
     <PackageTags>phoenixframework, websocket, elixir</PackageTags>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
     <PackOnBuild>true</PackOnBuild>
-    <PackageLicenseUrl>https://github.com/mjaric/fenix/blob/master/LICENSE</PackageLicenseUrl>
+    <IsPackable>true</IsPackable>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageId>Fenix</PackageId>
+    <PackageLicense>license.txt</PackageLicense>
+    <PackageLicenseUrl>https://raw.githubusercontent.com/mjaric/Akka.Persistence.EventStore/master/LICENSE</PackageLicenseUrl>
   </PropertyGroup>
 
   <ItemGroup>
