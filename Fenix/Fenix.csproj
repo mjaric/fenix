@@ -10,10 +10,14 @@
     <RepositoryUrl>https://github.com/mjaric/fenix.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>phoenixframework, websocket, elixir</PackageTags>
+    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+    <PackOnBuild>true</PackOnBuild>
+    <PackageLicenseUrl>https://github.com/mjaric/fenix/blob/master/LICENSE</PackageLicenseUrl>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="12.0.1" />
+    <PackageReference Include="NuGet.Build.Packaging" Version="0.2.0" />
   </ItemGroup>
 
 </Project>
