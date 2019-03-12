@@ -20,10 +20,7 @@ namespace FenixSimpleApp
         {
             var settings = new Settings();
             _socket = new Socket(settings);
-            _socket.Connected += (sender, args) =>
-            {
-                settings.Logger.Info("CONNECTED");
-            };
+            _socket.Connected += (sender, args) => { settings.Logger.Info("CONNECTED"); };
         }
 
         static void Main(string[] args)
@@ -32,7 +29,7 @@ namespace FenixSimpleApp
 
             // test concurrent connecting, should throw error on second attempt
             Task.Run(() => app.Connect());
-            Task.Run(() => app.Connect());
+//            Task.Run(() => app.Connect());
 
             Task.Delay(TimeSpan.FromSeconds(3))
                 .ContinueWith(t => { app.JoinLobby(); });
@@ -48,15 +45,15 @@ namespace FenixSimpleApp
         private static void ConnectMultipleTimes()
         {
             var cts = new CancellationTokenSource(10000); // Auto-cancel after 5 sec
-            Action<Task> repeatAction = null;
-            repeatAction = _ignored1 =>
+
+            void RepeatAction(Task _)
             {
                 var app2 = new Program();
                 app2.Connect();
-                Task.Delay(1000, cts.Token)
-                    .ContinueWith(_ignored2 => repeatAction(_ignored2), cts.Token); // Repeat every 1 sec
-            };
-            Task.Delay(2000, cts.Token).ContinueWith(repeatAction, cts.Token); // Launch with 2 sec delay
+                Task.Delay(1000, cts.Token).ContinueWith(RepeatAction, cts.Token); // Repeat every 1 sec
+            }
+
+            Task.Delay(2000, cts.Token).ContinueWith(RepeatAction, cts.Token); // Launch with 2 sec delay
             cts.Token.WaitHandle.WaitOne();
         }
 
@@ -88,41 +85,32 @@ namespace FenixSimpleApp
                 ");
             });
 
-
+            channel.Subscribe(ChannelEvents.Close, (ch, response) =>
+            {
+                Console.WriteLine($"Channel {channel.Topic} is closed now!");
+            });
+            
+            
             try
             {
                 var result = await channel.JoinAsync();
-                _socket.Settings.Logger.Info($"JOINED: {result.Response}");
-                Task.Delay(5000).ContinueWith(task => { channel.SendAsync("new_msg", new {body = "Hi guys 1"}); });
-                Task.Delay(5000).ContinueWith(task => { channel.SendAsync("new_msg", new {body = "Hi guys 2"}); });
-                Task.Delay(5000).ContinueWith(task => { channel.SendAsync("new_msg", new {body = "Hi guys 3"}); });
-//                await channel.SendAsync("new_msg", new {body = "Hi there"});
+                _socket.Settings.Logger.Info($"JOIN COMPLETED: status = {result.Status}, response: {result.Response}");
+                
 
+                Task.Delay(1000).ContinueWith(async task =>
+                {
+                    await channel.SendAsync("new_msg", new {body = "Hi guys 2"});
+                }).ConfigureAwait(false);
+                Task.Delay(2000).ContinueWith(async task =>
+                {
+                    await channel.SendAsync("new_msg", new {body = "Hi guys 3"});
+                }).ConfigureAwait(false);
+                Task.Delay(1500).ContinueWith(async task => { await channel.LeaveAsync(); }).ConfigureAwait(false);
+                await channel.SendAsync("new_msg", new {body = "Hi guys 1"});
             }
             catch (Exception ex)
             {
                 _socket.Settings.Logger.Error(ex);
-            }
-        }
-
-        private void OnLobbyLeave(Channel channel, ChannelLeaveReason reason, Exception ex)
-        {
-            _socket.Settings.Logger.Info(
-                $"Channel Leave: {channel.Topic}, reason {reason}, exception [{ex?.GetType()}, {ex?.Message}] ");
-        }
-
-        private void OnLobbyMessage(Channel channel, Push push)
-        {
-            throw new NotImplementedException();
-        }
-
-        private class ChatMessage
-        {
-            public string Body { get; set; }
-
-            public ChatMessage(string body)
-            {
-                Body = body;
             }
         }
     }

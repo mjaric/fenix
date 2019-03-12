@@ -8,13 +8,13 @@ namespace Fenix.Internal
 {
     internal class JoinChannelMessage : InternalMessage
     {
-        public readonly TaskCompletionSource<JoinResult> Source;
+        public readonly TaskCompletionSource<PushResult> Source;
         public readonly Channel Channel;
         public readonly string Topic;
         public readonly object Payload;
 
         public JoinChannelMessage(
-            TaskCompletionSource<JoinResult> source,
+            TaskCompletionSource<PushResult> source,
             Channel channel,
             string topic, 
             object payload

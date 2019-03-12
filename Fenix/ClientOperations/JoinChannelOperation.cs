@@ -7,18 +7,18 @@ using Newtonsoft.Json.Linq;
 
 namespace Fenix.ClientOperations
 {
-    internal class JoinChannelOperation : OperationBase<JoinResult>
+    internal class JoinChannelOperation : OperationBase<PushResult>
     {
         public Channel Channel { get; }
         private readonly object _payload;
 
         public JoinChannelOperation(
             ILogger logger,
-            TaskCompletionSource<JoinResult> source,
+            TaskCompletionSource<PushResult> source,
             Channel channel,
             long joinRef,
             object payload
-        ) : base(logger, source, joinRef, channel.Topic, ChannelEvents.Join)
+        ) : base(logger, source, channel, joinRef, channel.Topic, ChannelEvents.Join)
         {
             Channel = channel;
             _payload = payload;
@@ -34,17 +34,25 @@ namespace Fenix.ClientOperations
             if (push.Payload.ContainsKey("status") && push.Payload.Value<string>("status") == "ok")
             {
                 Succeed();
-                Channel.Joined = true;
+                Channel.Open();
                 return new InspectionResult(InspectionDecision.EndOperation, "Subscribed");
             }
-
-            Fail(new JoinFailedException("Rejected", push.Payload["response"] as JObject));
-            return new InspectionResult(InspectionDecision.EndOperation, "Server error");
+            
+            if (push.Payload.ContainsKey("status") && push.Payload.Value<string>("status") == "error")
+            {
+                Succeed();
+                Channel.Close();
+                return new InspectionResult(InspectionDecision.EndOperation, "Rejected");    
+            }
+            
+            Fail(new JoinFailedException("UnexpectedResult", push.Payload["response"] as JObject));
+            Channel.Close();
+            return new InspectionResult(InspectionDecision.EndOperation, "UnexpectedResult");   
         }
 
-        protected override JoinResult TransformResponse(Push push)
+        protected override PushResult TransformResponse(Push push)
         {
-            return push.Payload.ToObject<JoinResult>();
+            return push.Payload.ToObject<PushResult>();
         }
 
     }

@@ -6,18 +6,19 @@ using Fenix.Responses;
 
 namespace Fenix.ClientOperations
 {
-    internal class PushOperation : OperationBase<SendResult>
+    internal class PushOperation : OperationBase<PushResult>
     {
-        private object _payload;
+        private readonly object _payload;
 
         public PushOperation(
             ILogger logger,
-            TaskCompletionSource<SendResult> source,
+            TaskCompletionSource<PushResult> source,
+            Channel channel,
             long joinRef,
             string topic,
             string requestEventType,
             object payload
-        ) : base(logger, source, joinRef, topic,
+        ) : base(logger, source, channel, joinRef, topic,
             requestEventType)
         {
             _payload = payload;
@@ -32,9 +33,9 @@ namespace Fenix.ClientOperations
             return _payload;
         }
 
-        protected override SendResult TransformResponse(Push push)
+        protected override PushResult TransformResponse(Push push)
         {
-            return push.Payload.ToObject<SendResult>();
+            return push.Payload.ToObject<PushResult>();
         }
 
         protected override InspectionResult InspectResponse(Push push)
@@ -43,11 +44,11 @@ namespace Fenix.ClientOperations
             {
                 case ChannelEvents.Reply:
                     Succeed();
-                    return new InspectionResult(InspectionDecision.EndOperation, "Subscribed");
+                    return new InspectionResult(InspectionDecision.EndOperation, "MessageSent");
                 default:
                     Fail(new PushFailException(
                         $"Unexpected event type {push.ChannelEvent}, expected is {ChannelEvents.Reply}"));
-                    return new InspectionResult(InspectionDecision.EndOperation, "Failed");
+                    return new InspectionResult(InspectionDecision.EndOperation, "UnexpectedEventType");
             }
         }
     }

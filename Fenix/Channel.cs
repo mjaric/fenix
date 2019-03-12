@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Fenix.ClientOperations;
 using Fenix.Common;
+using Fenix.Exceptions;
 using Fenix.Internal;
 using Fenix.Logging;
 using Fenix.Responses;
@@ -14,10 +15,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Fenix
 {
-    /// <summary>
-    /// Represents a subscription to single phoenix channel.
-    /// </summary>
-    public class Channel : IDisposable, IChannel
+    internal class Channel : IDisposable, IChannel
     {
         private readonly Settings _settings;
         private readonly SocketLogicHandler _handler;
@@ -43,11 +41,6 @@ namespace Fenix
         public bool Joined
         {
             get => _joinedOnce == 1;
-            set
-            {
-                Interlocked.Exchange(ref _joinedOnce, 1);
-                _state = ChannelState.Joined;
-            }
         }
 
         /// <summary>
@@ -78,24 +71,27 @@ namespace Fenix
 
         public void Dispose()
         {
-            Leave();
+            LeaveAsync().ConfigureAwait(false);
         }
 
+        /// <inheritdoc cref="IChannel"/>
         public IChannel Subscribe(string eventName, Action<IChannel, JObject> callback)
         {
             _bindings.AddOrUpdate(eventName, callback, (_, action) => callback);
             return this;
         }
 
+        /// <inheritdoc cref="IChannel"/>
         public IChannel Unsubscribe(string eventName)
         {
             _bindings.TryRemove(eventName, out _);
             return this;
         }
 
-        public async Task<JoinResult> JoinAsync()
+        /// <inheritdoc cref="IChannel"/>
+        public async Task<PushResult> JoinAsync()
         {
-            var source = TaskCompletionSourceFactory.Create<JoinResult>();
+            var source = TaskCompletionSourceFactory.Create<PushResult>();
             var operation = new JoinChannelOperation(
                 _settings.Logger,
                 source,
@@ -103,24 +99,35 @@ namespace Fenix
                 JoinRef,
                 _payload
             );
-            await EnqueueOperation(operation).ConfigureAwait(false);
+            await EnqueueOperation(operation, int.MaxValue).ConfigureAwait(false);
             return await source.Task.ConfigureAwait(false);
         }
 
-        public void Leave()
+        /// <inheritdoc cref="IChannel"/>
+        public async Task<PushResult> LeaveAsync(TimeSpan? timeout = null)
         {
-            throw new NotImplementedException();
+            var source = new TaskCompletionSource<PushResult>();
+            var operation = new LeaveChannelOperation(
+                _settings.Logger,
+                source,
+                this,
+                JoinRef
+            );
+            await EnqueueOperation(operation, _settings.MaxRetries, timeout.GetValueOrDefault(_settings.PushTimeout)).ConfigureAwait(false);
+            return await source.Task.ConfigureAwait(false);
         }
 
-        public async Task<SendResult> SendAsync(string eventType, object payload, int? maxRetries = null,
+        /// <inheritdoc cref="IChannel"/>
+        public async Task<PushResult> SendAsync(string eventType, object payload, int? maxRetries = null,
             TimeSpan? timeout = null)
         {
-            var source = TaskCompletionSourceFactory.Create<SendResult>();
+            var source = TaskCompletionSourceFactory.Create<PushResult>();
             _pushBuffer.Enqueue(
                 (
                     new PushOperation(
                         _settings.Logger,
                         source,
+                        this,
                         JoinRef,
                         Topic,
                         eventType, payload
@@ -129,11 +136,12 @@ namespace Fenix
                     timeout.GetValueOrDefault(_settings.OperationTimeout)
                 )
             );
+            // TODO: write benchmark and check if scheduling TryProcessBuffer in threadpool can improve push rate
             await TryProcessBuffer();
             return await source.Task.ConfigureAwait(false);
         }
 
-        public void Receive(Push push)
+        internal void Receive(Push push)
         {
             var channel = this;
             if (_bindings.TryGetValue(push.ChannelEvent, out var callback))
@@ -176,6 +184,18 @@ namespace Fenix
                     timeout.GetValueOrDefault(_settings.OperationTimeout)
                 )
             );
+        }
+
+        public void Close()
+        {
+            _state = ChannelState.Closed;
+            _ = _handler.UnsubscribeTopic(Topic, this);
+        }
+
+        public void Open()
+        {
+            Interlocked.Exchange(ref _joinedOnce, 1);
+            _state = ChannelState.Joined;
         }
     }
 }

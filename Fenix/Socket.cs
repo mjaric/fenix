@@ -31,7 +31,7 @@ namespace Fenix
         {
             parameters = parameters ?? new (string, string)[] { };
             var source = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
-            _handler.EnqueueMessage(new EstablishConnectionMessage(source, uri, parameters));
+            _handler.EnqueueMessage(new StartConnectionMessage(source, uri, parameters));
             return source.Task;
         }
 

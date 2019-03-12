@@ -45,6 +45,8 @@ namespace Fenix
         private ConcurrentDictionary<string, Channel> _channels =
                 new ConcurrentDictionary<string, Channel>();
 
+        private (string, string)[] _parameters = { };
+
 
         public int TotalOperationCount => _operations.TotalOperationCount;
 
@@ -62,18 +64,17 @@ namespace Fenix
             _operations = new OperationsManager(this, _settings);
 
             //Connecting
-            _queue.RegisterHandler<EstablishConnectionMessage>(msg =>
-                          EstablishConnection(msg.Source, msg.Uri, msg.Parameters))
-                  .RegisterHandler<CloseConnectionMessage>(msg =>
-                          CloseConnection(msg.Status, msg.Reason, msg.Exception))
-                  .RegisterHandler<ConnectionEstablishedMessage>(msg => ConnectionEstablished(msg.Connection))
-                  .RegisterHandler<ConnectionClosedMessage>(msg =>
-                          ConnectionClosed(msg.Connection, msg.Error, msg.Exception));
+            _queue.RegisterHandler<StartConnectionMessage>(StartConnection);
+            _queue.RegisterHandler<CloseConnectionMessage>(CloseConnection);
 
-            _queue.RegisterHandler<StartOperationMessage>(msg =>
-                    StartOperation(msg.Operation, msg.MaxRetries, msg.Timeout));
 
-            _queue.RegisterHandler<HandlePushMessage>(msg => HandlePush(msg.Connection, msg.RawMessage));
+            // WebSocketConnection
+            _queue.RegisterHandler<ConnectionEstablishedMessage>(ConnectionEstablished);
+            _queue.RegisterHandler<ConnectionClosedMessage>(ConnectionClosed);
+
+            _queue.RegisterHandler<StartOperationMessage>(StartOperation);
+            _queue.RegisterHandler<HandlePushMessage>(
+                msg => HandlePush(msg.Connection, msg.RawMessage));
 
             _queue.RegisterHandler<TimerTickMessage>(_ => TimerTick());
 
@@ -88,8 +89,10 @@ namespace Fenix
         }
 
 
-        private void ConnectionEstablished(WebSocketConnection connection)
+        private void ConnectionEstablished(ConnectionEstablishedMessage msg)
         {
+            Ensure.NotNull(msg, nameof(msg));
+            WebSocketConnection connection = msg.Connection;
             if (_state != ConnectionState.Connecting || _connection != connection || connection.IsClosed)
             {
                 var oldConnId = _connection?.ConnectionId ?? Guid.Empty;
@@ -108,8 +111,14 @@ namespace Fenix
             _state = ConnectionState.Connected;
         }
 
-        private void CloseConnection(WebSocketCloseStatus status, string reason, Exception exception = null)
+        private void CloseConnection(CloseConnectionMessage msg)
         {
+            Ensure.NotNull(msg, nameof(msg));
+
+            var status = msg.Status;
+            var reason = msg.Reason;
+            var exception = msg.Exception;
+
             if (_state == ConnectionState.Closed)
             {
                 _logger.Debug(
@@ -134,8 +143,33 @@ namespace Fenix
             RaiseClosed(reason);
         }
 
-        private void ConnectionClosed(WebSocketConnection connection, WebSocketError error, Exception exception)
+        private void ConnectionClosed(ConnectionClosedMessage msg)
         {
+            Ensure.NotNull(msg, nameof(msg));
+            WebSocketConnection connection = msg.Connection;
+            WebSocketError error = msg.Error;
+            Exception exception = msg.Exception;
+
+            if (_state == ConnectionState.Init) throw new Exception();
+            if (_state == ConnectionState.Closed || _connection != connection)
+            {
+                _settings.Logger.Debug(
+                    $"IGNORED (_state: {_state}, _conn.ID: {(_connection == null ? Guid.Empty : _connection.ConnectionId):B}, conn.ID: {connection.ConnectionId:B}): TCP connection to [{connection.Endpoint}] closed.");
+                return;
+            }
+
+            _state = ConnectionState.Connecting;
+            _connectingPhase = ConnectingPhase.Reconnecting;
+
+            _settings.Logger.Debug($"Connection to [{connection.Endpoint}, L{connection.ConnectionId}] closed.");
+
+//            _channels.PurgeSubscribedAndDroppedSubscriptions(_connection.ConnectionId);
+            _reconnInfo = new ReconnectionInfo(_reconnInfo.ReconnectionAttempt, _stopwatch.Elapsed);
+
+            if (Interlocked.CompareExchange(ref _wasConnected, 0, 1) == 1)
+            {
+                RaiseDisconnected(connection.Endpoint);
+            }
         }
 
         private void CloseWebSocketConnection(WebSocketCloseStatus status, string reason)
@@ -171,7 +205,7 @@ namespace Fenix
                 "Finix: WebSocket connection to [{connection.Endpoint}, {connection.ConnectionId:B}] closed.");
 
             // _channels.PurgeSubscribedAndDroppedSubscriptions(_connection.ConnectionId);
-            // _reconnInfo = new ReconnectionInfo(_reconnInfo.ReconnectionAttempt, _stopwatch.Elapsed);
+            _reconnInfo = new ReconnectionInfo(_reconnInfo.ReconnectionAttempt, _stopwatch.Elapsed);
 
             if (Interlocked.CompareExchange(ref _wasConnected, 0, 1) == 1)
             {
@@ -201,24 +235,25 @@ namespace Fenix
         private void HandlePush(WebSocketConnection connection, string rawMessage)
         {
             _logger.Debug($"Finix: received push `{rawMessage}`");
-            var push = JArray.Parse(rawMessage);
-            var joinRef = push.Value<string>(0);
-            var pushRef = push.Value<string>(1);
-            var topic = push.Value<string>(2);
-            var channelEvent = push.Value<string>(3);
-            var payload = push.Value<JObject>(4);
+            var jArray = JArray.Parse(rawMessage);
+            var push = new Push(
+                jArray.Value<string>(2),
+                jArray.Value<string>(3),
+                jArray.Value<JObject>(4),
+                Push.ParseRef(jArray.Value<string>(1)),
+                Push.ParseRef(jArray.Value<string>(0))
+            );
 
+            //note: this will reset heartbeat
             _heartbeatInfo = _heartbeatInfo.LastPackageNumber == _packageNumber
                     ? new HeartbeatInfo(MakeRef(), true, _stopwatch.Elapsed)
                     : new HeartbeatInfo(_packageNumber, true, _stopwatch.Elapsed);
 
-            // this will reset heartbeat
-            var package = new Push(topic, channelEvent, payload, Push.ParseRef(pushRef), Push.ParseRef(joinRef));
-            if (package.PushRef.HasValue)
+            if (push.PushRef.HasValue)
             {
-                if (_operations.TryGetActiveOperation(package.PushRef.Value, out var operation))
+                if (_operations.TryGetActiveOperation(push.PushRef.Value, out var operation))
                 {
-                    var result = operation.Operation.InspectPackage(package);
+                    var result = operation.Operation.InspectPackage(push);
                     _logger.Debug(
                         $"HandleTcpPackage OPERATION DECISION {result.Decision} ({result.Description}), {operation}");
                     switch (result.Decision)
@@ -231,7 +266,7 @@ namespace Fenix
                             _operations.ScheduleOperationRetry(operation);
                             break;
                         case InspectionDecision.Reconnect:
-                            //ReconnectTo(new NodeEndPoints(result.TcpEndPoint, result.SecureTcpEndPoint));
+                            Reconnect(WebSocketCloseStatus.Empty);
                             _operations.ScheduleOperationRetry(operation);
                             break;
                         default: throw new Exception($"Unknown InspectionDecision: {result.Decision}");
@@ -241,16 +276,19 @@ namespace Fenix
                         _operations.TryScheduleWaitingOperations(connection);
                 }
             }
-
-            if (_channels.TryGetValue(topic, out var channel))
+            else if (
+                _channels.TryGetValue(push.Topic, out var channel)
+                && (!push.JoinRef.HasValue || channel.JoinRef == push.JoinRef && channel.PushRef == push.PushRef)
+            )
             {
-                if (!package.JoinRef.HasValue || channel.JoinRef == package.JoinRef && channel.PushRef == package.PushRef)
-                {
-                    channel.Receive(package);
-                }
+                channel.Receive(push);
             }
-            
-            
+            else
+            {
+                _settings.Logger.Warn(
+                    $"Fenix: DeadLetter channel message JoinRef: '{push.JoinRef}', PushRef: '{push.PushRef}', Topic: '{push.Topic}'"
+                );
+            }
         }
 
         private void TimerTick()
@@ -271,10 +309,11 @@ namespace Fenix
 
                         {
                             const string reason = "Reconnection limit reached.";
-                            CloseConnection(
-                                WebSocketCloseStatus.EndpointUnavailable,
-                                reason,
-                                new CannotEstablishConnectionException(reason)
+                            CloseConnection(new CloseConnectionMessage(
+                                        WebSocketCloseStatus.EndpointUnavailable,
+                                        reason,
+                                        new CannotEstablishConnectionException(reason)
+                                    )
                             );
                         }
                         else
@@ -341,13 +380,20 @@ namespace Fenix
                 var msg =
                         $"Finix: closing TCP connection [{_connection.Endpoint}, {_connection.ConnectionId}] due to HEARTBEAT TIMEOUT at ref {_heartbeatInfo.LastPackageNumber}.";
                 _logger.Warn(msg);
-                CloseConnection(WebSocketCloseStatus.EndpointUnavailable, "Heartbeat timeout",
-                    new HeartbeatTimeoutException(msg));
+                CloseConnection(new CloseConnectionMessage(WebSocketCloseStatus.EndpointUnavailable,
+                    "Heartbeat timeout",
+                    new HeartbeatTimeoutException(msg)));
             }
         }
 
-        private void StartOperation(IClientOperation operation, int maxRetries, TimeSpan timeout)
+        private void StartOperation(StartOperationMessage msg)
         {
+            Ensure.NotNull(msg, nameof(msg));
+
+            var operation = msg.Operation;
+            var maxRetries = msg.MaxRetries;
+            var timeout = msg.Timeout;
+
             switch (_state)
             {
                 case ConnectionState.Init:
@@ -372,14 +418,36 @@ namespace Fenix
             }
         }
 
-
-        private void EstablishConnection(
-            TaskCompletionSource<object> source,
-            Uri uri,
-            (string, string)[] parameters)
+        private void Reconnect(WebSocketCloseStatus closeStatus)
         {
-            Ensure.NotNull(source, nameof(source));
-            Ensure.NotNull(uri, nameof(uri));
+            var connection = _connection;
+            if (_state != ConnectionState.Connected)
+                return;
+
+            var msg =
+                    $"Fenix: WebSocketConnection '{_connection.ConnectionId}': going to reconnect to [{_connection.Endpoint}].";
+            _settings.Logger.Info(msg);
+            CloseWebSocketConnection(closeStatus, msg);
+
+            _state = ConnectionState.Connecting;
+            _connectingPhase = ConnectingPhase.ConnectionEstablishing;
+            EstablishConnection(
+                _endpoint,
+                _parameters,
+                () =>
+                {
+                    // todo: EnqueueMessage(new ConnectionClosedMessage(_connection, error))
+                },
+                ex => { });
+        }
+
+
+        private void StartConnection(StartConnectionMessage msg)
+        {
+            Ensure.NotNull(msg, nameof(msg));
+            TaskCompletionSource<object> source = msg.Source;
+            Uri uri = msg.Uri;
+            (string, string)[] parameters = msg.Parameters;
 
             switch (_state)
             {
@@ -387,6 +455,7 @@ namespace Fenix
                     _state = ConnectionState.Connecting;
                     _connectingPhase = ConnectingPhase.Reconnecting;
                     _endpoint = uri;
+                    _parameters = parameters;
                     Connect(source, _endpoint, parameters);
                     break;
                 case ConnectionState.Connecting:
@@ -407,6 +476,20 @@ namespace Fenix
 
         private void Connect(TaskCompletionSource<object> source, Uri uri, (string, string)[] parameters)
         {
+            var endpoint = uri;
+            EstablishConnection(
+                uri,
+                parameters,
+                () => { source.SetResult(null); },
+                ex =>
+                {
+                    source.SetException(
+                        new CannotEstablishConnectionException($"Unable to connect endpoint {endpoint}", ex));
+                });
+        }
+
+        private void EstablishConnection(Uri uri, (string, string)[] parameters, Action success, Action<Exception> fail)
+        {
             _logger?.Debug("Connecting...");
             if (_state != ConnectionState.Connecting) return;
             if (_connectingPhase != ConnectingPhase.Reconnecting) return;
@@ -425,15 +508,11 @@ namespace Fenix
             {
                 if (t.IsFaulted)
                 {
-                    EnqueueMessage(
-                        new CloseConnectionMessage(WebSocketCloseStatus.EndpointUnavailable,
-                            $"Unable to connect endpoint {uri}", t.Exception));
-                    source.SetException(
-                        new CannotEstablishConnectionException($"Unable to connect endpoint {uri}", t.Exception));
+                    fail(t.Exception);
                 }
                 else
                 {
-                    source.SetResult(null);
+                    success();
                 }
             });
         }
@@ -513,6 +592,7 @@ namespace Fenix
         private enum ConnectingPhase
         {
             Invalid,
+            EndPointDiscovery,
             Reconnecting,
             ConnectionEstablishing,
             Connected
@@ -523,11 +603,24 @@ namespace Fenix
             var channel = new Channel(_settings, this, topic, payload);
             _channels.AddOrUpdate(topic, channel, (t, oldChannel) =>
             {
-                oldChannel.Leave();
+                oldChannel.LeaveAsync().ConfigureAwait(false);
                 return channel;
             });
-            
+
             return channel;
+        }
+
+        public bool UnsubscribeTopic(string topic, Channel channel)
+        {
+            if (_channels.TryGetValue(topic, out var aChannel))
+            {
+                if (aChannel.JoinRef == channel.JoinRef)
+                {
+                    return _channels.TryRemove(topic, out _);
+                }
+            }
+
+            return true;
         }
     }
 }

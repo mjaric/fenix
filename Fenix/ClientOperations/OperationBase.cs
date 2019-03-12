@@ -14,6 +14,7 @@ namespace Fenix.ClientOperations
         protected readonly ILogger Logger;
         private readonly string _requestEventType;
         private readonly TaskCompletionSource<TResult> _source;
+        private readonly Channel _channel;
         private readonly string _topic;
         
         private int _completed;
@@ -29,13 +30,21 @@ namespace Fenix.ClientOperations
         protected OperationBase(
             ILogger logger,
             TaskCompletionSource<TResult> source,
+            Channel channel,
             long joinRef,
             string topic,
             string requestEventType
         )
         {
+            Ensure.NotNull(logger, nameof(logger));
+            Ensure.NotNull(source, nameof(source));
+            Ensure.NotNull(channel, nameof(channel));
+            Ensure.NotNullOrEmpty(topic, nameof(topic));
+            Ensure.Positive(joinRef, nameof(joinRef));
+            
             Logger = logger;
             _source = source;
+            _channel = channel;
             JoinRef = joinRef;
             _topic = topic;
             _requestEventType = requestEventType;
@@ -71,6 +80,7 @@ namespace Fenix.ClientOperations
                     return InspectServerErrorResponse(push);
                 case ChannelEvents.Close:
                     // ["1","1","room:lobby","phx_close",{}]
+                    _channel.Receive(push);
                     return InspectCloseResponse(push);
                 case ChannelEvents.Reply:
                     _response = push;
