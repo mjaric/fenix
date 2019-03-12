@@ -1,0 +1,20 @@
+/* This file is for your main application css. */
+
+ul, li {
+  list-style: none;
+}
+
+.messageItem {
+  
+}
+
+.messageText {
+  background-color: antiquewhite;
+  margin: 0 0 20px 0;
+  border-radius: 5px;
+  padding: 10px;
+}
+
+.messageSender {
+  color: navy;
+}

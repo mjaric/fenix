@@ -3,13 +3,13 @@ using System.Threading.Tasks;
 
 namespace Fenix.Internal
 {
-    internal class EstablishConnectionMessage : InternalMessage
+    internal class StartConnectionMessage : InternalMessage
     {
         public readonly TaskCompletionSource<object> Source;
         public readonly Uri Uri;
         public readonly (string, string)[] Parameters;
 
-        public EstablishConnectionMessage(
+        public StartConnectionMessage(
             TaskCompletionSource<object> source, 
             Uri uri, 
             (string, string)[] parameters

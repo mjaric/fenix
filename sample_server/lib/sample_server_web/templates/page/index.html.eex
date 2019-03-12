@@ -1,0 +1,10 @@
+<div class="main">
+  <div>
+    <span id="statusInfo">Connecting...</span>
+  </div>
+  <div id="messages"></div>
+  <input id="chat-input" type="text"></input>
+</div>
+
+<ul id="users">
+</ul>
