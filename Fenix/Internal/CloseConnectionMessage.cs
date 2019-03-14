@@ -20,14 +20,10 @@ namespace Fenix.Internal
     internal class ConnectionClosedMessage : InternalMessage
     {
         public readonly WebSocketConnection Connection;
-        public readonly WebSocketError Error;
-        public readonly Exception Exception;
 
-        public ConnectionClosedMessage(WebSocketConnection connection, WebSocketError error, Exception exception)
+        public ConnectionClosedMessage(WebSocketConnection connection)
         {
             Connection = connection;
-            Error = error;
-            Exception = exception;
         }
     }
 }

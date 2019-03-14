@@ -63,12 +63,12 @@ namespace Fenix
 
             _operations = new OperationsManager(this, _settings);
 
-            //Connecting
+            // Connecting
             _queue.RegisterHandler<StartConnectionMessage>(StartConnection);
             _queue.RegisterHandler<CloseConnectionMessage>(CloseConnection);
 
 
-            // WebSocketConnection
+            // from WebSocketConnection
             _queue.RegisterHandler<ConnectionEstablishedMessage>(ConnectionEstablished);
             _queue.RegisterHandler<ConnectionClosedMessage>(ConnectionClosed);
 
@@ -107,8 +107,7 @@ namespace Fenix
 
             _logger.Debug(
                 $"TCP connection to [{connection.Endpoint}, {connection.ConnectionId:B}] established.");
-            _connectingPhase = ConnectingPhase.Connected;
-            _state = ConnectionState.Connected;
+            GoToConnectedState();
         }
 
         private void CloseConnection(CloseConnectionMessage msg)
@@ -132,7 +131,7 @@ namespace Fenix
 
             _timer.Dispose();
             _operations.CleanUp();
-            // _channels.CleanUp();
+            // todo: _channels.CleanUp();
             CloseWebSocketConnection(status, reason);
 
             _logger.Info($"Finix: Connection Closed. Reason: {reason}.");
@@ -147,8 +146,6 @@ namespace Fenix
         {
             Ensure.NotNull(msg, nameof(msg));
             WebSocketConnection connection = msg.Connection;
-            WebSocketError error = msg.Error;
-            Exception exception = msg.Exception;
 
             if (_state == ConnectionState.Init) throw new Exception();
             if (_state == ConnectionState.Closed || _connection != connection)
@@ -204,7 +201,7 @@ namespace Fenix
             _logger.Debug(
                 "Finix: WebSocket connection to [{connection.Endpoint}, {connection.ConnectionId:B}] closed.");
 
-            // _channels.PurgeSubscribedAndDroppedSubscriptions(_connection.ConnectionId);
+            // todo: _channels.PurgeSubscribedAndDroppedSubscriptions(_connection.ConnectionId);
             _reconnInfo = new ReconnectionInfo(_reconnInfo.ReconnectionAttempt, _stopwatch.Elapsed);
 
             if (Interlocked.CompareExchange(ref _wasConnected, 0, 1) == 1)
@@ -320,6 +317,7 @@ namespace Fenix
                         {
                             RaiseReconnecting();
                             _operations.CheckTimeoutsAndRetry(_connection);
+                            EstablishConnection(_endpoint, _parameters, () => {}, exception => {});
                         }
                     }
 
@@ -502,7 +500,7 @@ namespace Fenix
                 TimeSpan.FromSeconds(20),
                 (connection, str) => EnqueueMessage(new HandlePushMessage(connection, str)),
                 connection => EnqueueMessage(new ConnectionEstablishedMessage(connection)),
-                (connection, error, ex) => EnqueueMessage(new ConnectionClosedMessage(connection, error, ex))
+                (connection, error, ex) => EnqueueMessage(new ConnectionClosedMessage(connection))
             );
             _connection.ConnectAsync().ContinueWith(t =>
             {
