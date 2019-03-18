@@ -90,6 +90,11 @@ namespace FenixSimpleApp
                 Console.WriteLine($"Channel {channel.Topic} is closed now!");
             });
             
+            channel.Subscribe("server_time", (ch, response) =>
+            {
+                Console.WriteLine($"Server time {response.Value<string>("message")}!");
+            });
+            
             
             try
             {
@@ -105,7 +110,7 @@ namespace FenixSimpleApp
                 {
                     await channel.SendAsync("new_msg", new {body = "Hi guys 3"});
                 }).ConfigureAwait(false);
-                Task.Delay(1500).ContinueWith(async task => { await channel.LeaveAsync(); }).ConfigureAwait(false);
+                Task.Delay(20000).ContinueWith(async task => { await channel.LeaveAsync(); }).ConfigureAwait(false);
                 await channel.SendAsync("new_msg", new {body = "Hi guys 1"});
             }
             catch (Exception ex)

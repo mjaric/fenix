@@ -42,8 +42,7 @@ namespace Fenix
 
         private readonly OperationsManager _operations;
 
-        private ConcurrentDictionary<string, Channel> _channels =
-                new ConcurrentDictionary<string, Channel>();
+        private ChannelManager _channels;
 
         private (string, string)[] _parameters = { };
 
@@ -62,7 +61,7 @@ namespace Fenix
             _queue = new SimpleQueuedHandler();
 
             _operations = new OperationsManager(this, _settings);
-
+            _channels = new ChannelManager(_settings, this);
             // Connecting
             _queue.RegisterHandler<StartConnectionMessage>(StartConnection);
             _queue.RegisterHandler<CloseConnectionMessage>(CloseConnection);
@@ -131,7 +130,7 @@ namespace Fenix
 
             _timer.Dispose();
             _operations.CleanUp();
-            // todo: _channels.CleanUp();
+            _channels.PurgeSubscribedAndDroppedChannels(_connection.ConnectionId);
             CloseWebSocketConnection(status, reason);
 
             _logger.Info($"Finix: Connection Closed. Reason: {reason}.");
@@ -160,7 +159,7 @@ namespace Fenix
 
             _settings.Logger.Debug($"Connection to [{connection.Endpoint}, L{connection.ConnectionId}] closed.");
 
-//            _channels.PurgeSubscribedAndDroppedSubscriptions(_connection.ConnectionId);
+            _channels.PurgeSubscribedAndDroppedChannels(_connection.ConnectionId);
             _reconnInfo = new ReconnectionInfo(_reconnInfo.ReconnectionAttempt, _stopwatch.Elapsed);
 
             if (Interlocked.CompareExchange(ref _wasConnected, 0, 1) == 1)
@@ -201,7 +200,7 @@ namespace Fenix
             _logger.Debug(
                 "Finix: WebSocket connection to [{connection.Endpoint}, {connection.ConnectionId:B}] closed.");
 
-            // todo: _channels.PurgeSubscribedAndDroppedSubscriptions(_connection.ConnectionId);
+            _channels.PurgeSubscribedAndDroppedChannels(_connection.ConnectionId);
             _reconnInfo = new ReconnectionInfo(_reconnInfo.ReconnectionAttempt, _stopwatch.Elapsed);
 
             if (Interlocked.CompareExchange(ref _wasConnected, 0, 1) == 1)
@@ -224,7 +223,7 @@ namespace Fenix
             if (_stopwatch.Elapsed - _lastTimeoutsTimeStamp >= _settings.OperationTimeoutCheckPeriod)
             {
                 _operations.CheckTimeoutsAndRetry(_connection);
-//                _channels.CheckTimeoutsAndRetry(_connection);
+                _channels.RejoinChannels(_connection);
                 _lastTimeoutsTimeStamp = _stopwatch.Elapsed;
             }
         }
@@ -317,7 +316,7 @@ namespace Fenix
                         {
                             RaiseReconnecting();
                             _operations.CheckTimeoutsAndRetry(_connection);
-                            EstablishConnection(_endpoint, _parameters, () => {}, exception => {});
+                            EstablishConnection(_endpoint, _parameters, () => { }, exception => { });
                         }
                     }
 
@@ -335,7 +334,7 @@ namespace Fenix
                         // So we reset reconnection count to zero on each timeout check period when connection is established
                         _reconnInfo = new ReconnectionInfo(0, _stopwatch.Elapsed);
                         _operations.CheckTimeoutsAndRetry(_connection);
-//                        _channels.CheckTimeoutsAndRetry(_connection);
+                        _channels.RejoinChannels(_connection);
                         _lastTimeoutsTimeStamp = _stopwatch.Elapsed;
                     }
 
@@ -474,16 +473,22 @@ namespace Fenix
 
         private void Connect(TaskCompletionSource<object> source, Uri uri, (string, string)[] parameters)
         {
-            var endpoint = uri;
+            void Success()
+            {
+                source.SetResult(null);
+            }
+
+            void Error(Exception ex)
+            {
+                source.SetException(
+                    new CannotEstablishConnectionException($"Unable to connect endpoint {uri}", ex));
+            }
+
             EstablishConnection(
                 uri,
                 parameters,
-                () => { source.SetResult(null); },
-                ex =>
-                {
-                    source.SetException(
-                        new CannotEstablishConnectionException($"Unable to connect endpoint {endpoint}", ex));
-                });
+                Success,
+                Error);
         }
 
         private void EstablishConnection(Uri uri, (string, string)[] parameters, Action success, Action<Exception> fail)
@@ -598,27 +603,12 @@ namespace Fenix
 
         public IChannel SubscribeTopic(string topic, object payload)
         {
-            var channel = new Channel(_settings, this, topic, payload);
-            _channels.AddOrUpdate(topic, channel, (t, oldChannel) =>
-            {
-                oldChannel.LeaveAsync().ConfigureAwait(false);
-                return channel;
-            });
-
-            return channel;
+            return _channels.CreateChannel(topic, payload);
         }
 
         public bool UnsubscribeTopic(string topic, Channel channel)
         {
-            if (_channels.TryGetValue(topic, out var aChannel))
-            {
-                if (aChannel.JoinRef == channel.JoinRef)
-                {
-                    return _channels.TryRemove(topic, out _);
-                }
-            }
-
-            return true;
+            return _channels.RemoveChannel(topic, channel);
         }
     }
 }

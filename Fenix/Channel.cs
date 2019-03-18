@@ -27,7 +27,6 @@ namespace Fenix
         private readonly ConcurrentDictionary<string, Action<IChannel, JObject>> _bindings =
                 new ConcurrentDictionary<string, Action<IChannel, JObject>>();
 
-
         private ChannelState _state;
 
         private int _joinedOnce;
@@ -37,10 +36,12 @@ namespace Fenix
         public long JoinRef { get; }
 
         public long PushRef { get; }
+        
+        internal Guid ConnectionId { get; set; } = Guid.Empty;
 
         public bool Joined
         {
-            get => _joinedOnce == 1;
+            get => _state == ChannelState.Joined || _state == ChannelState.Joining;
         }
 
         /// <summary>
@@ -136,7 +137,7 @@ namespace Fenix
                     timeout.GetValueOrDefault(_settings.OperationTimeout)
                 )
             );
-            // TODO: write benchmark and check if scheduling TryProcessBuffer in threadpool can improve push rate
+            // write benchmark and check if scheduling TryProcessBuffer in thread pool can improve push rate
             await TryProcessBuffer();
             return await source.Task.ConfigureAwait(false);
         }
@@ -186,10 +187,21 @@ namespace Fenix
             );
         }
 
-        public void Close()
+        public void Close(bool remove = true)
         {
             _state = ChannelState.Closed;
-            _ = _handler.UnsubscribeTopic(Topic, this);
+            if (remove)
+            {
+                _ = _handler.UnsubscribeTopic(Topic, this);    
+            }
+            
+        }
+
+        public void Fail(ConnectionClosedException connectionClosedException)
+        {
+            // simulate/notify app about channel closure
+            // Receive(new Push(Topic, ChannelEvents.Close, new JObject(), PushRef, JoinRef));
+            Close();
         }
 
         public void Open()

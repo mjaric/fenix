@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
-    <PackageVersion>0.1.0</PackageVersion>
+    <PackageVersion>0.1.2</PackageVersion>
     <Title>Fenix</Title>
     <Authors>Milan Jarić</Authors>
     <Description>Phoenixframework websocket protocol .NET implementation</Description>
@@ -17,6 +17,7 @@
     <PackageId>Fenix</PackageId>
     <PackageLicense>license.txt</PackageLicense>
     <PackageLicenseUrl>https://raw.githubusercontent.com/mjaric/Akka.Persistence.EventStore/master/LICENSE</PackageLicenseUrl>
+    <PackageReleaseNotes>Adding feature where seocket will try to reconnect on disconnect. Note: To auto-reconnect, connection need to be established  at least once</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>

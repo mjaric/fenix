@@ -40,15 +40,8 @@ namespace Fenix.Internal
 
         public override string ToString()
         {
-            return string.Format(
-                "Operation {0} ({1:D}): {2}, retry count: {3}, created: {4:HH:mm:ss.fff}, last updated: {5:HH:mm:ss.fff}",
-                Operation.GetType(),
-                Ref,
-                Operation,
-                RetryCount,
-                CreatedTime,
-                LastUpdated
-            );
+            return
+                    $"Operation {Operation.GetType()} ({Ref:D}): {Operation}, retry count: {RetryCount}, created: {CreatedTime:HH:mm:ss.fff}, last updated: {LastUpdated:HH:mm:ss.fff}";
         }
     }
 
@@ -231,7 +224,7 @@ namespace Fenix.Internal
             return true;
         }
 
-        public void ExecuteOperation(OperationItem operation, WebSocketConnection connection)
+        private void ExecuteOperation(OperationItem operation, WebSocketConnection connection)
         {
             operation.ConnectionId = connection.ConnectionId;
             operation.LastUpdated = DateTime.UtcNow;
@@ -262,7 +255,7 @@ namespace Fenix.Internal
             );
         }
 
-        internal class OperationItemSeqNoComparer : IComparer<OperationItem>
+        private class OperationItemSeqNoComparer : IComparer<OperationItem>
         {
             public int Compare(OperationItem x, OperationItem y)
             {

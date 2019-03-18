@@ -21,7 +21,8 @@ defmodule SampleServer.Worker do
   end
 
   defp timeout() do
-    {_, {_, _, s}} = :calendar.local_time()
-    (60 - s) * 1000
+    # {_, {_, _, s}} = :calendar.local_time()
+    # (60 - s) * 1000
+    1000
   end
 end
