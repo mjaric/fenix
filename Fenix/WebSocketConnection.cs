@@ -107,8 +107,6 @@ namespace Fenix
                 await _ws.SendAsync(new ArraySegment<byte>(message.Array, offset, count), WebSocketMessageType.Text,
                     lastMessage, CancellationToken.None);
             }
-
-            NotifySendCompleted(message.Count);
         }
 
 
@@ -119,8 +117,16 @@ namespace Fenix
                 while (_sendQueue.TryDequeue(out var segment))
                 {
                     if (segment.Array == null) continue;
-                    NotifySendStarting(segment.Count);
-                    SendMessageAsync(segment);
+                    try
+                    {
+                        NotifySendStarting(segment.Count);
+                        SendMessageAsync(segment);
+                        NotifySendCompleted(segment.Count);
+                    }
+                    catch (Exception)
+                    {
+                        NotifySendCompleted(0);
+                    }
                 }
 
                 Interlocked.Exchange(ref _sending, 0);

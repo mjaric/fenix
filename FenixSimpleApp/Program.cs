@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Fenix;
@@ -12,13 +13,16 @@ namespace FenixSimpleApp
     class Program
     {
         private const string token =
-                "SFMyNTY.g3QAAAACZAAEZGF0YW0AAAAEMTIzNGQABnNpZ25lZG4GAJMq6E5pAQ.fiAuw0yCDMvzi_gCkAbcWxAqTnWDW6w5yod8-RlQJME";
+                "SFMyNTY.g3QAAAACZAAEZGF0YW0AAAAEMTIzNGQABnNpZ25lZG4GADXlTPJpAQ.L0TvyizjtH-piNXJu8y_FKIrXjS7zHR2uoFLsv-Otqs";
 
         private Socket _socket;
 
         public Program()
         {
-            var settings = new Settings();
+            var settings = new Settings()
+            {
+                HeartbeatTimeout = TimeSpan.FromSeconds(1)
+            };
             _socket = new Socket(settings);
             _socket.Connected += (sender, args) => { settings.Logger.Info("CONNECTED"); };
         }
@@ -85,32 +89,34 @@ namespace FenixSimpleApp
                 ");
             });
 
-            channel.Subscribe(ChannelEvents.Close, (ch, response) =>
-            {
-                Console.WriteLine($"Channel {channel.Topic} is closed now!");
-            });
-            
-            channel.Subscribe("server_time", (ch, response) =>
-            {
-                Console.WriteLine($"Server time {response.Value<string>("message")}!");
-            });
-            
-            
+            channel.Subscribe(ChannelEvents.Close,
+                (ch, response) => { Console.WriteLine($"Channel {channel.Topic} is closed now!"); });
+
+            channel.Subscribe("server_time",
+                (ch, response) => { Console.WriteLine($"Server time {response.Value<string>("message")}!"); });
+
+
             try
             {
                 var result = await channel.JoinAsync();
                 _socket.Settings.Logger.Info($"JOIN COMPLETED: status = {result.Status}, response: {result.Response}");
-                
 
-                Task.Delay(1000).ContinueWith(async task =>
+
+                // concurrent send
+                foreach (var thread in Enumerable.Range(1, 3))
                 {
-                    await channel.SendAsync("new_msg", new {body = "Hi guys 2"});
-                }).ConfigureAwait(false);
-                Task.Delay(2000).ContinueWith(async task =>
-                {
-                    await channel.SendAsync("new_msg", new {body = "Hi guys 3"});
-                }).ConfigureAwait(false);
-                Task.Delay(20000).ContinueWith(async task => { await channel.LeaveAsync(); }).ConfigureAwait(false);
+                    _ = Task.Delay(500)
+                        .ContinueWith(async task =>
+                        {
+                            long no = 1;
+                            while (no < 100)
+                            {
+                                await channel.SendAsync("new_msg", new { body = $"[{thread}] Hi guys #{no++}" });
+                            }
+                        });
+                }
+
+                _ = Task.Delay(10000).ContinueWith(task => { _socket.Close(); }).ConfigureAwait(false);
                 await channel.SendAsync("new_msg", new {body = "Hi guys 1"});
             }
             catch (Exception ex)

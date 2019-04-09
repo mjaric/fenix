@@ -17,9 +17,6 @@ let channel = socket.channel("room:lobby", {
   random_number: Math.round(Math.random() * 1000)
 });
 
-let channel2 = socket.channel("room:lobby", {
-  random_number: Math.round(Math.random() * 1000)
-});
 
 let presences = {};
 
@@ -114,15 +111,6 @@ function joinChannel() {
 }
 
 joinChannel();
-
-setTimeout(() => {
-  channel2
-    .join()
-    .receive("ok", (response) => console.info("second join========", response))
-    .receive("error", (response) => console.error("second join========", response))
-    .receive("timeout", () => console.warn("second join========", "timeout"));
-}, 10000);
-
 
 
 export default socket;
